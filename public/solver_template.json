@@ -1,0 +1,643 @@
+{
+  "basis": {
+    "start_date": "2026-01-07",
+    "initial_weeks": 10,
+    "max_attempts": 10,
+    "days_per_week": [
+      "Mi",
+      "Do",
+      "Fr",
+      "Sa",
+      "So"
+    ],
+    "time_slots": [
+      "14",
+      "17",
+      "20"
+    ]
+  },
+  "employees": [
+    "Alisa",
+    "Eileen",
+    "Eren",
+    "Kimi",
+    "Kübra",
+    "Lea",
+    "Lena",
+    "Lucy",
+    "Maik",
+    "Marianna",
+    "Meike",
+    "Niko",
+    "Semih",
+    "Serkan",
+    "Wolfi",
+    "Xenia",
+    "Max",
+    "Mika"
+  ],
+  "ignored_employees": [
+    "Mika"
+  ],
+  "employee_limits": {
+    "Wolfi": {
+      "max_total": 6
+    },
+    "Lea": {
+      "max_total": 6
+    }
+  },
+  "limits_mode": "hard",
+  "weights_limits": {
+    "W_LIMITS": 600
+  },
+  "ferien_bw": [
+    [
+      "2025-10-27",
+      "2025-10-31"
+    ],
+    [
+      "2025-12-22",
+      "2026-01-05"
+    ],
+    [
+      "2026-03-30",
+      "2026-04-11"
+    ],
+    [
+      "2026-05-26",
+      "2026-06-05"
+    ],
+    [
+      "2026-12-23",
+      "2026-12-31"
+    ]
+  ],
+  "urlaub_by_name": {
+    "Lea": [
+      [
+        "2026-01-05",
+        "2026-03-12"
+      ]
+    ],
+    "Lena": [
+      [
+        "2026-02-14",
+        "2026-02-22"
+      ]
+    ],
+    "Kimi": [
+      [
+        "2026-01-16",
+        "2026-01-20"
+      ],
+      [
+        "2026-02-05",
+        "2026-02-08"
+      ]
+    ],
+    "Marianna": [
+      [
+        "2026-01-05",
+        "2026-01-06"
+      ],
+      [
+        "2026-01-11",
+        "2026-01-12"
+      ],
+      [
+        "2026-01-17",
+        "2026-01-17"
+      ],
+      [
+        "2026-01-24",
+        "2026-01-25"
+      ],
+      [
+        "2026-01-31",
+        "2026-01-31"
+      ],
+      [
+        "2026-02-05",
+        "2026-02-08"
+      ]
+    ]
+  },
+  "pflichtbesetzung_normal": {
+    "Mi": {
+      "14": 0,
+      "17": 0,
+      "20": 2
+    },
+    "Do": {
+      "14": 0,
+      "17": 0,
+      "20": 0
+    },
+    "Fr": {
+      "14": 0,
+      "17": 1,
+      "20": 2
+    },
+    "Sa": {
+      "14": 2,
+      "17": 2,
+      "20": 2
+    },
+    "So": {
+      "14": 2,
+      "17": 2,
+      "20": 1
+    }
+  },
+  "pflichtbesetzung_ferien": {
+    "Mi": {
+      "14": 0,
+      "17": 0,
+      "20": 2
+    },
+    "Do": {
+      "14": 0,
+      "17": 0,
+      "20": 0
+    },
+    "Fr": {
+      "14": 0,
+      "17": 1,
+      "20": 2
+    },
+    "Sa": {
+      "14": 2,
+      "17": 2,
+      "20": 2
+    },
+    "So": {
+      "14": 2,
+      "17": 2,
+      "20": 2
+    }
+  },
+  "wuensche_by_name": {
+    "Alisa": [
+      [
+        "Sa",
+        "14"
+      ],
+      [
+        "Sa",
+        "17"
+      ],
+      [
+        "Sa",
+        "20"
+      ],
+      [
+        "So",
+        "14"
+      ],
+      [
+        "So",
+        "17"
+      ],
+      [
+        "So",
+        "20"
+      ]
+    ],
+    "Lena": [
+      [
+        "So",
+        "14"
+      ],
+      [
+        "So",
+        "17"
+      ]
+    ],
+    "Lucy": [
+      [
+        "Fr",
+        "20"
+      ],
+      [
+        "So",
+        "14"
+      ],
+      [
+        "So",
+        "17"
+      ]
+    ],
+    "Maik": [
+      [
+        "Mi",
+        "14"
+      ],
+      [
+        "Mi",
+        "17"
+      ],
+      [
+        "Mi",
+        "20"
+      ],
+      [
+        "So",
+        "14"
+      ],
+      [
+        "So",
+        "17"
+      ],
+      [
+        "So",
+        "20"
+      ]
+    ],
+    "Marianna": [
+      [
+        "Mi",
+        "20"
+      ],
+      [
+        "Do",
+        "20"
+      ],
+      [
+        "So",
+        "20"
+      ]
+    ],
+    "Max": [
+      [
+        "Fr",
+        "17"
+      ],
+      [
+        "Sa",
+        "17"
+      ],
+      [
+        "So",
+        "17"
+      ]
+    ],
+    "Meike": [
+      [
+        "Mi",
+        "20"
+      ],
+      [
+        "Fr",
+        "20"
+      ]
+    ],
+    "Serkan": [
+      [
+        "Sa",
+        "20"
+      ],
+      [
+        "So",
+        "14"
+      ],
+      [
+        "So",
+        "17"
+      ],
+      [
+        "So",
+        "20"
+      ]
+    ],
+    "Xenia": [
+      [
+        "Sa",
+        "14"
+      ],
+      [
+        "Sa",
+        "17"
+      ],
+      [
+        "Sa",
+        "20"
+      ]
+    ]
+  },
+  "bevorzugte_paare": [
+    [
+      "Kimi",
+      "Lea"
+    ],
+    [
+      "Alisa",
+      "Niko"
+    ],
+    [
+      "Lena",
+      "Marianna"
+    ]
+  ],
+  "pair_percent_bounds_named": {},
+  "pair_percent_fallback": {
+    "min": 50.0,
+    "max": 70.0
+  },
+  "inkompatible_paare": [
+    [
+      "Lea",
+      "Wolfi"
+    ],
+    [
+      "Lea",
+      "Kübra"
+    ],
+    [
+      "Lea",
+      "Eren"
+    ],
+    [
+      "Lea",
+      "Max"
+    ],
+    [
+      "Marianna",
+      "Wolfi"
+    ]
+  ],
+  "weekly_unavailable": {
+    "Alisa": [
+      {
+        "days": [
+          "Do"
+        ],
+        "times": "ALL"
+      },
+      {
+        "days": [
+          "Fr"
+        ],
+        "times": [
+          "17",
+          "20"
+        ]
+      }
+    ],
+    "Lena": [
+      {
+        "days": [
+          "Mi",
+          "Do",
+          "Fr"
+        ],
+        "times": "ALL"
+      },
+      {
+        "days": [
+          "Sa",
+          "So"
+        ],
+        "times": [
+          "20"
+        ]
+      }
+    ],
+    "Maik": [
+      {
+        "days": [
+          "Do"
+        ],
+        "times": [
+          "20"
+        ]
+      },
+      {
+        "days": [
+          "Fr"
+        ],
+        "times": [
+          "17",
+          "20"
+        ]
+      }
+    ],
+    "Marianna": [
+      {
+        "days": [
+          "Mi",
+          "Do",
+          "Fr"
+        ],
+        "times": [
+          "14",
+          "17"
+        ]
+      }
+    ],
+    "Meike": [
+      {
+        "days": [
+          "Do",
+          "Fr"
+        ],
+        "times": [
+          "14",
+          "17"
+        ]
+      }
+    ],
+    "Max": [
+      {
+        "days": [
+          "Do",
+          "Mi"
+        ],
+        "times": [
+          "14",
+          "17"
+        ]
+      }
+    ],
+    "Lea": [
+      {
+        "days": [
+          "Mi",
+          "Do",
+          "Fr"
+        ],
+        "times": [
+          "14",
+          "17"
+        ]
+      },
+      {
+        "days": [
+          "Sa"
+        ],
+        "times": [
+          "14"
+        ]
+      }
+    ],
+    "Niko": [
+      {
+        "days": [
+          "Mi",
+          "Fr"
+        ],
+        "times": [
+          "14",
+          "17"
+        ]
+      },
+      {
+        "days": [
+          "Do",
+          "Sa"
+        ],
+        "times": "ALL"
+      }
+    ],
+    "Serkan": [
+      {
+        "days": [
+          "Mi",
+          "Do",
+          "Fr"
+        ],
+        "times": [
+          "14",
+          "17"
+        ]
+      }
+    ],
+    "Wolfi": [
+      {
+        "days": [
+          "Fr",
+          "Sa"
+        ],
+        "times": "ALL"
+      }
+    ],
+    "Xenia": [
+      {
+        "days": [
+          "Mi",
+          "Fr",
+          "Sa",
+          "So"
+        ],
+        "times": [
+          "14",
+          "17"
+        ]
+      },
+      {
+        "days": [
+          "Do"
+        ],
+        "times": "ALL"
+      }
+    ],
+    "Lucy": [
+      {
+        "days": [
+          "Mi",
+          "Do"
+        ],
+        "times": "ALL"
+      }
+    ]
+  },
+  "frequency_rules": [
+    {
+      "employees": [
+        "Marianna"
+      ],
+      "tags": [
+        "Mi",
+        "Do",
+        "Fr",
+        "Sa",
+        "So"
+      ],
+      "times": [
+        "14",
+        "17"
+      ],
+      "window_weeks": 4,
+      "min_count": 0,
+      "max_count": 2,
+      "count_per_week": "slot",
+      "sliding": true
+    },
+    {
+      "employees": [
+        "Meike"
+      ],
+      "tags": [
+        "Sa",
+        "So"
+      ],
+      "times": [
+        "14",
+        "17",
+        "20"
+      ],
+      "window_weeks": 4,
+      "min_count": 0,
+      "max_count": 2,
+      "count_per_week": "slot",
+      "sliding": true
+    },
+    {
+      "employees": [
+        "Lea"
+      ],
+      "tags": [
+        "Mi",
+        "Do",
+        "Fr",
+        "Sa",
+        "So"
+      ],
+      "times": [
+        "14",
+        "17",
+        "20"
+      ],
+      "window_weeks": 1,
+      "min_count": 0,
+      "max_count": 1,
+      "count_per_week": "slot",
+      "sliding": true
+    }
+  ],
+  "weights": {
+    "W_WISH": 7,
+    "W_SPREAD": 8,
+    "W_SLOTDEV": 5,
+    "W_PAIR": 120,
+    "W_PROP_FAIR": 12
+  },
+  "caps": {
+    "spread_caps": [
+      2,
+      2,
+      3,
+      3
+    ],
+    "slot_cap_add_list": [
+      1,
+      2,
+      3
+    ]
+  },
+  "viz": {
+    "cell_h": 0.5,
+    "week_gap": 0.3
+  },
+  "solver_entrypoint": "kino_solver:Solve"
+}
