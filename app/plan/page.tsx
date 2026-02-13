@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { getMe } from "@/lib/auth/getMe";
+import type { StaffingProfile, SchoolHoliday } from "@/lib/types/staffing";
 
 type ShiftRow = {
   id: number;
@@ -57,6 +58,47 @@ function formatDE(isoDate: string) {
   return d.toLocaleDateString("de-DE");
 }
 
+// ---------- Profil-Helper ----------
+function dayOfWeekToString(dayIndex: number): string {
+  const days = [
+    "sunday",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+  ];
+  return days[dayIndex];
+}
+
+function isDateInHolidays(date: Date, holidays: SchoolHoliday[]): boolean {
+  const dateStr = date.toISOString().split("T")[0];
+  return holidays.some((holiday) => {
+    return dateStr >= holiday.start_date && dateStr <= holiday.end_date;
+  });
+}
+
+function getApplicableProfile(
+  date: Date,
+  normalProfile: StaffingProfile,
+  holidayProfile: StaffingProfile,
+  holidays: SchoolHoliday[]
+): StaffingProfile {
+  return isDateInHolidays(date, holidays) ? holidayProfile : normalProfile;
+}
+
+function getMinPersonsForShift(
+  dateStr: string,
+  timeSlot: string, // "14:00"
+  profile: StaffingProfile
+): number {
+  const date = dateUTC(dateStr);
+  const dayName = dayOfWeekToString(date.getUTCDay());
+  const slotKey = timeSlot.split(":")[0]; // "14:00" → "14"
+  return profile[dayName]?.[slotKey] ?? 0;
+}
+
 // ---------- Page ----------
 export default function PlanPage() {
   const router = useRouter();
@@ -70,8 +112,13 @@ export default function PlanPage() {
   const [weekStart, setWeekStart] = useState<string | null>(null); // Montag ISO
   const [shifts, setShifts] = useState<ShiftRow[]>([]);
 
-  // Daten laden (initial + bei weekStart / onlyMine NICHT nötig neu zu laden, nur Anzeige)
-  const loadWeek = async (mondayIso: string) => {
+  // Profile und Schulferien laden
+  const [normalProfile, setNormalProfile] = useState<StaffingProfile | null>(null);
+  const [holidayProfile, setHolidayProfile] = useState<StaffingProfile | null>(null);
+  const [holidays, setHolidays] = useState<SchoolHoliday[]>([]);
+
+  // ========== loadWeek mit useCallback ==========
+  const loadWeek = useCallback(async (mondayIso: string) => {
     setLoading(true);
     setMsg(null);
 
@@ -106,39 +153,98 @@ export default function PlanPage() {
       return;
     }
 
-    setShifts((data ?? []) as any);
-    setLoading(false);
-  };
+    // ========== WICHTIG: Schichten mit Profil-Werten bereichern ==========
+    if (normalProfile && holidayProfile) {
+      const enrichedShifts = (data ?? []).map((shift: any) => {
+        const date = dateUTC(shift.date);
+        const applicableProfile = getApplicableProfile(
+          date,
+          normalProfile,
+          holidayProfile,
+          holidays
+        );
 
-  // Init: login check + default weekStart aus erster shift-date
+        const minPersons = getMinPersonsForShift(
+          shift.date,
+          shift.time_slot,
+          applicableProfile
+        );
+
+        // max_persons = min_persons (außer Admin hat es erhöht)
+        const effectiveMaxPersons = Math.max(shift.max_persons ?? minPersons, minPersons);
+
+        return {
+          ...shift,
+          min_persons: minPersons,
+          max_persons: effectiveMaxPersons,
+        };
+      });
+
+      setShifts(enrichedShifts);
+    } else {
+      setShifts((data ?? []) as any);
+    }
+
+    setLoading(false);
+  }, [normalProfile, holidayProfile, holidays]);
+
+  // Init: login check + default weekStart aus erster shift-date + Profile laden
   useEffect(() => {
     (async () => {
       const { user } = await getMe();
       if (!user) return router.replace("/login");
       setMeId(user.id);
 
-      // erste Schicht holen um Default-Woche zu bestimmen
-      const { data, error } = await supabase
-        .from("shifts")
-        .select("date")
-        .order("date", { ascending: true })
-        .limit(1);
+      // Profile + Schulferien laden
+      try {
+        const { data: normalData } = await supabase
+          .from("settings")
+          .select("value")
+          .eq("key", "pflichtbesetzung_normal")
+          .single();
 
-      if (error) {
-        setMsg(error.message);
+        const { data: holidayData } = await supabase
+          .from("settings")
+          .select("value")
+          .eq("key", "pflichtbesetzung_ferien")
+          .single();
+
+        const { data: holidaysList } = await supabase
+          .from("school_holidays_bw")
+          .select("*");
+
+        const normal = normalData?.value || {};
+        const holiday = holidayData?.value || {};
+
+        setNormalProfile(normal);
+        setHolidayProfile(holiday);
+        setHolidays((holidaysList as SchoolHoliday[]) || []);
+
+        // Erste Schicht holen um Default-Woche zu bestimmen
+        const { data } = await supabase
+          .from("shifts")
+          .select("date")
+          .order("date", { ascending: true })
+          .limit(1);
+
+        const firstDate = (data?.[0] as any)?.date as string | undefined;
+        const mondayIso = firstDate ? mondayOfWeek(firstDate) : mondayOfWeek(isoUTC(new Date()));
+        setWeekStart(mondayIso);
+      } catch (err) {
+        console.error("Error loading data:", err);
         setLoading(false);
-        return;
       }
-
-      const firstDate = (data?.[0] as any)?.date as string | undefined;
-      const mondayIso = firstDate ? mondayOfWeek(firstDate) : mondayOfWeek(isoUTC(new Date()));
-      setWeekStart(mondayIso);
-      await loadWeek(mondayIso);
     })();
   }, [router]);
 
-  // Dropdown: Montage aus vorhandenen shifts ableiten (einmalig „gut genug“: aus geladenen Wochen + später erweiterbar)
-  // Für MVP: Wir bauen Dropdown aus allen Montage-Daten aus DB (klein/ok).
+  // ========== Wenn Profiles geladen sind, lade die Woche neu! ==========
+  useEffect(() => {
+    if (weekStart && normalProfile && holidayProfile) {
+      loadWeek(weekStart);
+    }
+  }, [weekStart, normalProfile, holidayProfile, loadWeek]);
+
+  // Dropdown: Montage aus vorhandenen shifts ableiten
   const [allMondays, setAllMondays] = useState<string[]>([]);
   useEffect(() => {
     (async () => {
@@ -289,6 +395,7 @@ export default function PlanPage() {
                     const fixed = assigns.filter((a) => a.status === "fix");
                     const pending = assigns.filter((a) => a.status === "freiwillig");
 
+                    // Nutze die bereicherten max_persons aus loadWeek
                     const maxP = shift.max_persons ?? 0;
                     const free = Math.max(0, maxP - fixed.length);
 
