@@ -2,159 +2,104 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
-import { getMe } from "@/lib/auth/getMe";
+import { requireAdminOrRedirect } from "@/lib/guards/requireAdminClient";
+import { approveRequest, denyRequest, fetchOpenRequests, RequestRow } from "@/lib/api/adminRequests";
 
-type ReqRow = {
-  id: number;
-  status: string;
-  user_id: string;
-  shift_id: number;
-  created_at: string;
-  users: { name: string } | null;
-  shifts: { date: string; time_slot: string } | null;
-};
-
-function formatDE(isoDate: string) {
-  const d = new Date(isoDate + "T12:00:00Z");
-  return d.toLocaleDateString("de-DE");
-}
-
-export default function AdminRequestsPage() {
+export default function AdminRequestPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [workingId, setWorkingId] = useState<number | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
-  const [rows, setRows] = useState<ReqRow[]>([]);
+  const [rows, setRows] = useState<RequestRow[]>([]);
 
-  const load = async () => {
-    setLoading(true);
-    setMsg(null);
-
-    const { data, error } = await supabase
-      .from("assignments")
-      .select(`
-        id,
-        status,
-        user_id,
-        shift_id,
-        created_at,
-        users ( name ),
-        shifts ( date, time_slot )
-      `)
-      .eq("status", "freiwillig")
-      .order("created_at", { ascending: true });
-
-    if (error) {
-      setMsg(error.message);
-      setRows([]);
-      setLoading(false);
-      return;
-    }
-
-    setRows((data ?? []) as any);
-    setLoading(false);
+  const reload = async () => {
+    const list = await fetchOpenRequests();
+    setRows(list);
   };
 
   useEffect(() => {
     (async () => {
-      const { user, profile } = await getMe();
-      if (!user) return router.replace("/login");
-
-      // wenn du Role-Gating schon hast:
-      if (profile?.role !== "admin") return router.replace("/plan");
-
-      await load();
+      try {
+        const gate = await requireAdminOrRedirect(router);
+        if (!gate.ok) return;
+        await reload();
+      } catch (e: any) {
+        setMsg(e?.message ?? "Fehler beim Laden.");
+      } finally {
+        setLoading(false);
+      }
     })();
   }, [router]);
 
-  const approve = async (row: ReqRow) => {
+  const onApprove = async (r: RequestRow) => {
     setMsg(null);
-
-    // optional: Kapazität prüfen (max_persons vs fix count)
-    // MVP: einfach setzen
-    const { error } = await supabase
-      .from("assignments")
-      .update({ status: "fix" })
-      .eq("id", row.id)
-      .eq("status", "freiwillig");
-
-    if (error) {
-      setMsg(error.message);
-      return;
+    setWorkingId(r.id);
+    try {
+      await approveRequest(r.id, r.shift_id);
+      await reload();
+      setMsg("Approved ✅");
+    } catch (e: any) {
+      setMsg(e?.message ?? "Approve fehlgeschlagen.");
+    } finally {
+      setWorkingId(null);
     }
-
-    await load();
   };
 
-  const reject = async (row: ReqRow) => {
+  const onDeny = async (r: RequestRow) => {
     setMsg(null);
-
-    const { error } = await supabase
-      .from("assignments")
-      .update({ status: "abgesagt" })
-      .eq("id", row.id)
-      .eq("status", "freiwillig");
-
-    if (error) {
-      setMsg(error.message);
-      return;
+    setWorkingId(r.id);
+    try {
+      await denyRequest(r.id);
+      await reload();
+      setMsg("Abgelehnt ✅");
+    } catch (e: any) {
+      setMsg(e?.message ?? "Ablehnen fehlgeschlagen.");
+    } finally {
+      setWorkingId(null);
     }
-
-    await load();
   };
 
-  if (loading) return <main className="p-6">Lade Anfragen…</main>;
+  if (loading) return <main className="p-6">Lade…</main>;
 
   return (
     <main className="p-6 space-y-4">
-      <header className="space-y-1">
-        <h1 className="text-xl font-bold">Admin: Schicht-Anfragen</h1>
-        {msg && <p className="text-sm text-red-600">Fehler: {msg}</p>}
-      </header>
+      <h1 className="text-xl font-bold">Admin – Anfragen</h1>
+
+      {msg && <div className="text-sm">{msg}</div>}
 
       {rows.length === 0 ? (
-        <div className="text-sm text-gray-600">Keine offenen Anfragen 🎉</div>
+        <div className="text-sm text-gray-600">Keine offenen Anfragen.</div>
       ) : (
-        <div className="overflow-auto border rounded">
-          <table className="min-w-[900px] w-full border-collapse">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="p-3 text-left border-b">Datum</th>
-                <th className="p-3 text-left border-b">Slot</th>
-                <th className="p-3 text-left border-b">Mitarbeiter</th>
-                <th className="p-3 text-left border-b">Aktion</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} className="align-top">
-                  <td className="p-3 border-b">
-                    {r.shifts?.date ? formatDE(r.shifts.date) : "?"}
-                  </td>
-                  <td className="p-3 border-b">
-                    {r.shifts?.time_slot ? r.shifts.time_slot.replace(":00", "") : "?"}
-                  </td>
-                  <td className="p-3 border-b">{r.users?.name ?? "???"}</td>
-                  <td className="p-3 border-b">
-                    <div className="flex gap-2">
-                      <button
-                        className="border rounded px-3 py-1 text-sm hover:bg-gray-50"
-                        onClick={() => approve(r)}
-                      >
-                        Bestätigen
-                      </button>
-                      <button
-                        className="border rounded px-3 py-1 text-sm hover:bg-gray-50"
-                        onClick={() => reject(r)}
-                      >
-                        Ablehnen
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="space-y-2">
+          {rows.map((r) => (
+            <div key={r.id} className="border rounded p-3 flex items-center justify-between gap-3">
+              <div className="text-sm">
+                <div className="font-medium">
+                  {r.user_name ?? r.user_id}
+                </div>
+                <div className="text-gray-600">
+                  {r.shift_date ?? "?"} • {r.shift_time_slot ?? "?"} • max {r.shift_max_persons ?? "?"}
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  className="px-3 py-1 rounded bg-black text-white disabled:opacity-50"
+                  onClick={() => onApprove(r)}
+                  disabled={workingId === r.id}
+                >
+                  {workingId === r.id ? "…" : "Approve"}
+                </button>
+                <button
+                  className="px-3 py-1 rounded border disabled:opacity-50"
+                  onClick={() => onDeny(r)}
+                  disabled={workingId === r.id}
+                >
+                  {workingId === r.id ? "…" : "Ablehnen"}
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </main>

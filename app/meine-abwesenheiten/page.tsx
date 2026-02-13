@@ -2,87 +2,105 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
-import { getMe } from "@/lib/auth/getMe";
-
-type Absence = {
-  id: number;
-  user_id: string;
-  type: "urlaub" | "krank" | "sonstiges";
-  start_date: string; // YYYY-MM-DD
-  end_date: string;   // YYYY-MM-DD
-  comment: string | null;
-};
+import { getCurrentUserAndProfile } from "@/lib/api/auth";
+import { createAbsence, deleteAbsenceById, listAbsencesByUser } from "@/lib/api/absences";
+import { buildCreateAbsenceInput, type AbsenceRow, type AbsenceType } from "@/lib/rules/absences";
 
 export default function MyAbsencesPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<any>(null);
 
-  const [rows, setRows] = useState<Absence[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [profileId, setProfileId] = useState<string | null>(null);
+
+  const [rows, setRows] = useState<AbsenceRow[]>([]);
   const [err, setErr] = useState<string | null>(null);
 
   // Form
-  const [type, setType] = useState<Absence["type"]>("urlaub");
+  const [type, setType] = useState<AbsenceType>("urlaub");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [comment, setComment] = useState("");
 
   const canSubmit = useMemo(() => !!startDate && !!endDate, [startDate, endDate]);
 
-  async function load() {
+  async function reload(userId: string) {
     setErr(null);
-    const { data, error } = await supabase
-      .from("absences")
-      .select("id,user_id,type,start_date,end_date,comment")
-      .order("start_date", { ascending: false });
-
-    if (error) setErr(error.message);
-    setRows((data as Absence[]) ?? []);
+    try {
+      const data = await listAbsencesByUser(userId);
+      setRows(data);
+    } catch (e: any) {
+      setErr(e?.message ?? "Fehler beim Laden.");
+    }
   }
 
   useEffect(() => {
+    let alive = true;
+
     (async () => {
-      const { user, profile } = await getMe();
-      if (!user) return router.replace("/login");
-      setProfile(profile);
-      await load();
+      const { user, profile } = await getCurrentUserAndProfile();
+      if (!alive) return;
+
+      if (!user) {
+        router.replace("/login");
+        return;
+      }
+
+      // in deinem Projekt scheint profile.id die User-UUID zu sein
+      const pid = (profile?.id as string) || user.id;
+
+      setProfileId(pid);
+      await reload(pid);
       setLoading(false);
     })();
+
+    return () => {
+      alive = false;
+    };
   }, [router]);
 
   const onCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!profileId) return;
+
     setErr(null);
 
-    const { error } = await supabase.from("absences").insert({
-      user_id: profile.id, // RLS erlaubt nur eigenes (oder admin)
+    const built = buildCreateAbsenceInput({
+      userId: profileId,
       type,
-      start_date: startDate,
-      end_date: endDate,
-      comment: comment.trim() ? comment.trim() : null,
+      startDate,
+      endDate,
+      commentRaw: comment,
     });
 
-    if (error) {
-      setErr(error.message);
+    if (!built.ok) {
+      setErr(built.error);
       return;
     }
 
-    setStartDate("");
-    setEndDate("");
-    setComment("");
-    setType("urlaub");
-    await load();
+    try {
+      await createAbsence(built.value);
+
+      setStartDate("");
+      setEndDate("");
+      setComment("");
+      setType("urlaub");
+
+      await reload(profileId);
+    } catch (e: any) {
+      setErr(e?.message ?? "Fehler beim Speichern.");
+    }
   };
 
   const onDelete = async (id: number) => {
+    if (!profileId) return;
     setErr(null);
-    const { error } = await supabase.from("absences").delete().eq("id", id);
-    if (error) {
-      setErr(error.message);
-      return;
+
+    try {
+      await deleteAbsenceById(id);
+      await reload(profileId);
+    } catch (e: any) {
+      setErr(e?.message ?? "Fehler beim Löschen.");
     }
-    await load();
   };
 
   if (loading) return <main className="p-6">Lade…</main>;
@@ -98,35 +116,63 @@ export default function MyAbsencesPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="text-sm">Typ</label>
-            <select className="w-full border rounded px-3 py-2" value={type} onChange={(e) => setType(e.target.value as any)}>
+            <select
+              className="w-full border rounded px-3 py-2"
+              value={type}
+              onChange={(e) => setType(e.target.value as AbsenceType)}
+            >
               <option value="urlaub">Urlaub</option>
               <option value="krank">Krank</option>
               <option value="sonstiges">Sonstiges</option>
             </select>
           </div>
+
           <div>
             <label className="text-sm">Kommentar (optional)</label>
-            <input className="w-full border rounded px-3 py-2" value={comment} onChange={(e) => setComment(e.target.value)} />
+            <input
+              className="w-full border rounded px-3 py-2"
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+            />
           </div>
+
           <div>
             <label className="text-sm">Von</label>
-            <input className="w-full border rounded px-3 py-2" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
+            <input
+              className="w-full border rounded px-3 py-2"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              required
+            />
           </div>
+
           <div>
             <label className="text-sm">Bis</label>
-            <input className="w-full border rounded px-3 py-2" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required />
+            <input
+              className="w-full border rounded px-3 py-2"
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              required
+            />
           </div>
         </div>
 
         {err && <p className="text-red-600 text-sm">Fehler: {err}</p>}
 
-        <button className="bg-black text-white rounded px-4 py-2 disabled:opacity-60" disabled={!canSubmit} type="submit">
+        <button
+          className="bg-black text-white rounded px-4 py-2 disabled:opacity-60"
+          disabled={!canSubmit}
+          type="submit"
+        >
           Abwesenheit speichern
         </button>
       </form>
 
       <section className="space-y-2">
         <h2 className="font-semibold">Einträge</h2>
+
         <div className="border rounded divide-y">
           {rows.length === 0 ? (
             <div className="p-4 text-sm text-gray-600">Keine Einträge.</div>
@@ -139,6 +185,7 @@ export default function MyAbsencesPage() {
                   </div>
                   {a.comment && <div className="text-sm text-gray-600">{a.comment}</div>}
                 </div>
+
                 <button className="text-sm underline" onClick={() => onDelete(a.id)}>
                   Löschen
                 </button>

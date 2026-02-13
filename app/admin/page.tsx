@@ -2,25 +2,31 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getMe } from "@/lib/auth/getMe";
+import { checkAdminAccess } from "@/lib/api/admin";
 
 export default function AdminHome() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let alive = true;
+
     (async () => {
-      const { user, profile } = await getMe();
-      if (!user) {
-        router.replace("/login");
+      const res = await checkAdminAccess();
+
+      if (!alive) return;
+
+      if (!res.allowed) {
+        router.replace(res.redirectTo);
         return;
       }
-      if (profile?.role !== "admin") {
-        router.replace("/plan");
-        return;
-      }
+
       setLoading(false);
     })();
+
+    return () => {
+      alive = false;
+    };
   }, [router]);
 
   if (loading) return <main className="p-6">Lade…</main>;

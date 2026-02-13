@@ -1,17 +1,31 @@
 "use client";
 
-import { useEffect } from "react";
-import { supabase } from "@/lib/supabase/client";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { logoutUser } from "@/lib/api/auth";
 
 export default function LogoutPage() {
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let alive = true;
+
     (async () => {
-      await supabase.auth.signOut();
+      try {
+        await logoutUser();
+      } catch (err) {
+        console.error("Logout Fehler:", err);
+      }
+
+      if (!alive) return;
+
       router.replace("/login");
     })();
+
+    return () => {
+      alive = false;
+    };
   }, [router]);
 
   return <main className="p-6">Logout…</main>;

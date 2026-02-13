@@ -2,162 +2,222 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
-import { getMe } from "@/lib/auth/getMe";
 
-type TimeSlot = "14:00" | "17:00" | "20:00";
+import { getCurrentUserAndProfile } from "@/lib/api/auth";
+import {
+  createUnavailabilityRulesBulk,
+  deleteUnavailabilityRuleById,
+  listUnavailabilityRulesByUser,
+} from "@/lib/api/unavailabilityRules";
 
-type Rule = {
-  id: number;
-  user_id: string;
-  weekday: number; // 1..7
-  time_slot: TimeSlot | null; // null = ganztägig
-  comment: string | null;
-  created_at: string;
-};
+import {
+  SLOTS,
+  WEEKDAYS,
+  ruleLabel,
+  buildCreateRulesBulk,
+  type TimeSlot,
+  type UnavailabilityRuleRow,
+} from "@/lib/rules/unavailabilityRules";
 
-const WD: Record<number, string> = { 1: "Mo", 2: "Di", 3: "Mi", 4: "Do", 5: "Fr", 6: "Sa", 7: "So" };
-const SLOTS: TimeSlot[] = ["14:00", "17:00", "20:00"];
-
-export default function UnavailabilityRulesPage() {
+export default function UnverfuegbarkeitenPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<any>(null);
 
-  const [rows, setRows] = useState<Rule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  const [rows, setRows] = useState<UnavailabilityRuleRow[]>([]);
   const [err, setErr] = useState<string | null>(null);
 
   // Form
-  const [weekday, setWeekday] = useState(1);
-  const [allDay, setAllDay] = useState(true);
-  const [timeSlot, setTimeSlot] = useState<TimeSlot>("14:00");
+  const [weekday, setWeekday] = useState<number>(1);
+  const [allDay, setAllDay] = useState<boolean>(true);
+  const [selectedSlots, setSelectedSlots] = useState<Record<TimeSlot, boolean>>({
+    "14:00": false,
+    "17:00": true,
+    "20:00": false,
+  });
   const [comment, setComment] = useState("");
 
-  const canSubmit = useMemo(() => {
-    if (allDay) return true;
-    return !!timeSlot;
-  }, [allDay, timeSlot]);
+  const sortedRows = useMemo(() => {
+    const rank = (r: UnavailabilityRuleRow) => (r.time_slot === null ? 0 : 1);
+    return [...rows].sort((a, b) => {
+      if (a.weekday !== b.weekday) return a.weekday - b.weekday;
+      const ra = rank(a), rb = rank(b);
+      if (ra !== rb) return ra - rb;
+      return (a.time_slot ?? "").localeCompare(b.time_slot ?? "");
+    });
+  }, [rows]);
 
-  async function load() {
+  async function reload(uid: string) {
     setErr(null);
-    const { data, error } = await supabase
-      .from("unavailability_rules")
-      .select("id,user_id,weekday,time_slot,comment,created_at")
-      .order("weekday", { ascending: true })
-      .order("time_slot", { ascending: true });
-
-    if (error) setErr(error.message);
-    setRows((data as Rule[]) ?? []);
+    try {
+      setRows(await listUnavailabilityRulesByUser(uid));
+    } catch (e: any) {
+      setErr(e?.message ?? "Fehler beim Laden.");
+    }
   }
 
   useEffect(() => {
+    let alive = true;
+
     (async () => {
-      const { user, profile } = await getMe();
-      if (!user) return router.replace("/login");
-      setProfile(profile);
-      await load();
+      const { user, profile } = await getCurrentUserAndProfile();
+      if (!alive) return;
+
+      if (!user) {
+        router.replace("/login");
+        return;
+      }
+
+      const uid = (profile?.id as string) || user.id;
+      setUserId(uid);
+
+      await reload(uid);
       setLoading(false);
     })();
+
+    return () => {
+      alive = false;
+    };
   }, [router]);
 
-  const onCreate = async (e: React.FormEvent) => {
+  function toggleSlot(slot: TimeSlot) {
+    setSelectedSlots((prev) => ({ ...prev, [slot]: !prev[slot] }));
+  }
+
+  const chosenSlots = useMemo(
+    () => SLOTS.filter((s) => selectedSlots[s]),
+    [selectedSlots]
+  );
+
+  async function onCreate(e: React.FormEvent) {
     e.preventDefault();
+    if (!userId) return;
+
     setErr(null);
 
-    const payload = {
-      user_id: profile.id,
+    const built = buildCreateRulesBulk({
+      userId,
       weekday,
-      time_slot: allDay ? null : timeSlot,
-      comment: comment.trim() ? comment.trim() : null,
-    };
+      allDay,
+      slots: chosenSlots,
+      commentRaw: comment,
+      existing: rows,
+    });
 
-    const { error } = await supabase.from("unavailability_rules").insert(payload);
-    if (error) {
-      setErr(error.message);
+    if (!built.ok) {
+      setErr(built.error);
       return;
     }
 
-    setAllDay(true);
-    setTimeSlot("14:00");
-    setComment("");
-    await load();
-  };
+    try {
+      await createUnavailabilityRulesBulk(built.value);
 
-  const onDelete = async (id: number) => {
+      // UX: Kommentar behalten oft sinnvoll, aber ich leere ihn
+      setComment("");
+      await reload(userId);
+    } catch (e: any) {
+      setErr(e?.message ?? "Fehler beim Speichern.");
+    }
+  }
+
+  async function onDelete(id: number) {
+    if (!userId) return;
     setErr(null);
-    const { error } = await supabase.from("unavailability_rules").delete().eq("id", id);
-    if (error) {
-      setErr(error.message);
-      return;
+    try {
+      await deleteUnavailabilityRuleById(id);
+      await reload(userId);
+    } catch (e: any) {
+      setErr(e?.message ?? "Fehler beim Löschen.");
     }
-    await load();
-  };
+  }
 
   if (loading) return <main className="p-6">Lade…</main>;
 
   return (
     <main className="p-6 space-y-6">
       <header className="space-y-1">
-        <h1 className="text-xl font-bold">Unverfügbarkeiten</h1>
-        <p className="text-sm text-gray-600">Wiederkehrend: Wochentag + ganztägig oder Slot (14/17/20)</p>
+        <h1 className="text-xl font-bold">Unverfügbarkeiten (regelmäßig)</h1>
+        <p className="text-sm text-gray-600">
+          Beispiel: „Jeden Montag ganztägig“ oder „Jeden Freitag nur 20:00“.
+        </p>
       </header>
 
-      <form onSubmit={onCreate} className="border rounded p-4 space-y-3 max-w-2xl">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <label className="text-sm">Wochentag</label>
-            <select className="w-full border rounded px-3 py-2" value={weekday} onChange={(e) => setWeekday(parseInt(e.target.value, 10))}>
-              {Object.entries(WD).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
-              ))}
-            </select>
-          </div>
+      <form onSubmit={onCreate} className="border rounded p-4 space-y-4 max-w-xl">
+        <div>
+          <label className="text-sm">Wochentag</label>
+          <select
+            className="w-full border rounded px-3 py-2"
+            value={weekday}
+            onChange={(e) => setWeekday(parseInt(e.target.value, 10))}
+          >
+            {Object.entries(WEEKDAYS).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </div>
 
-          <div className="flex items-end gap-2">
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} />
-              Ganztägig
-            </label>
-          </div>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={allDay}
+            onChange={(e) => setAllDay(e.target.checked)}
+          />
+          <span>Ganztägig</span>
+        </label>
 
-          {!allDay && (
-            <div>
-              <label className="text-sm">Slot</label>
-              <select className="w-full border rounded px-3 py-2" value={timeSlot} onChange={(e) => setTimeSlot(e.target.value as TimeSlot)}>
-                {SLOTS.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div className={allDay ? "md:col-span-2" : ""}>
-            <label className="text-sm">Kommentar (optional)</label>
-            <input className="w-full border rounded px-3 py-2" value={comment} onChange={(e) => setComment(e.target.value)} />
+        <div className={allDay ? "opacity-50 pointer-events-none" : ""}>
+          <div className="text-sm mb-2">Slots</div>
+          <div className="flex flex-wrap gap-3">
+            {SLOTS.map((s) => (
+              <label key={s} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={selectedSlots[s]}
+                  onChange={() => toggleSlot(s)}
+                  disabled={allDay}
+                />
+                <span>{s}</span>
+              </label>
+            ))}
           </div>
+          <div className="text-xs text-gray-500 mt-1">
+            Tipp: Mehrere Slots auswählen → mehrere Regeln werden gespeichert.
+          </div>
+        </div>
+
+        <div>
+          <label className="text-sm">Kommentar (optional)</label>
+          <input
+            className="w-full border rounded px-3 py-2"
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+          />
         </div>
 
         {err && <p className="text-red-600 text-sm">Fehler: {err}</p>}
 
-        <button className="bg-black text-white rounded px-4 py-2 disabled:opacity-60" disabled={!canSubmit} type="submit">
-          Regel speichern
+        <button className="bg-black text-white rounded px-4 py-2" type="submit">
+          Regel(n) speichern
         </button>
       </form>
 
       <section className="space-y-2">
-        <h2 className="font-semibold">Regeln</h2>
+        <h2 className="font-semibold">Meine Regeln</h2>
+
         <div className="border rounded divide-y">
-          {rows.length === 0 ? (
+          {sortedRows.length === 0 ? (
             <div className="p-4 text-sm text-gray-600">Keine Regeln.</div>
           ) : (
-            rows.map((r) => (
+            sortedRows.map((r) => (
               <div key={r.id} className="p-4 flex items-center justify-between gap-4">
                 <div>
-                  <div className="font-medium">
-                    {WD[r.weekday]} — {r.time_slot === null ? "ganztägig" : r.time_slot}
-                  </div>
+                  <div className="font-medium">{ruleLabel(r)}</div>
                   {r.comment && <div className="text-sm text-gray-600">{r.comment}</div>}
                 </div>
+
                 <button className="text-sm underline" onClick={() => onDelete(r.id)}>
                   Löschen
                 </button>
